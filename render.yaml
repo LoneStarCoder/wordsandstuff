@@ -1,0 +1,16 @@
+# Render Blueprint for reference. The live service was created with the same
+# settings; REDIS_URL points at an existing Key Value instance.
+services:
+  - type: web
+    name: wordsandstuff
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: KEY_PREFIX
+        value: "wns:"
+      - key: REDIS_URL
+        sync: false # internal connection string of a Render Key Value instance

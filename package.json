@@ -1,0 +1,22 @@
+{
+  "name": "wordsandstuff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Words and Stuff - word games to play with friends (or a bot).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node tools/build.js",
+    "start": "node server/index.js",
+    "dev": "node tools/build.js && node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@redis/client": "^6.2.1",
+    "esbuild": "^0.28.2",
+    "web-push": "^3.6.7",
+    "ws": "^8.21.3"
+  }
+}
