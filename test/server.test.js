@@ -149,6 +149,7 @@ test('two friends play a game through invites, moves, chat and a rematch', async
 });
 
 test('bad input is rejected politely', async () => {
+  assert.equal((await fetch(base + '/ws')).status, 426);
   assert.equal((await call('POST', '/api/hello', { name: '   ' })).status, 400);
   const a = (await call('POST', '/api/hello', { name: 'Zed' })).data;
   const g = (await call('POST', '/api/games', { v: 'nope' }, a.token)).data;

@@ -139,6 +139,13 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
       return res.end('ok');
     }
 
+    // WebSocket upgrades are handled by hub.js; a plain request here means a
+    // proxy stripped the Upgrade header.
+    if (path === '/ws') {
+      res.writeHead(426, { 'Content-Type': 'text/plain', Upgrade: 'websocket' });
+      return res.end('WebSocket only');
+    }
+
     if (path.startsWith('/api/')) {
       if (!limits.api(ipOf(req))) throw new HttpError(429, 'Slow down a little.');
       return api(req, res, path.slice(5).split('/'), url);
