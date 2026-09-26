@@ -43,6 +43,15 @@ export function loadStatic(dir) {
   return files;
 }
 
+// If-None-Match uses weak comparison, and proxies in front of us (Render's
+// edge) may turn our ETags into weak ones (W/"…") when they recompress.
+export function etagMatches(header, etag) {
+  if (!header) return false;
+  const bare = t => t.trim().replace(/^W\//, '');
+  const want = bare(etag);
+  return header.split(',').some(t => t.trim() === '*' || bare(t) === want);
+}
+
 export function serveFile(req, res, file, headers = {}) {
   const h = {
     'Content-Type': file.type,
@@ -51,7 +60,7 @@ export function serveFile(req, res, file, headers = {}) {
     Vary: 'Accept-Encoding',
     ...headers,
   };
-  if (req.headers['if-none-match'] === file.etag) {
+  if (etagMatches(req.headers['if-none-match'], file.etag)) {
     res.writeHead(304, h);
     return res.end();
   }

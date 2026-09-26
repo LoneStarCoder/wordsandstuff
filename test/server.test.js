@@ -94,6 +94,8 @@ test('two friends play a game through invites, moves, chat and a rematch', async
   assert.equal(bobView.data.rr, undefined);
   const etag = bobView.headers.get('etag');
   assert.equal((await call('GET', `/api/games/${g.id}`, null, b.token, { 'If-None-Match': etag })).status, 304);
+  // Edge proxies may hand the browser a weak version of the tag.
+  assert.equal((await call('GET', `/api/games/${g.id}`, null, b.token, { 'If-None-Match': 'W/' + etag })).status, 304);
 
   await setRack(g.id, 0, 'CATSDOG');
   assert.equal((await call('POST', `/api/games/${g.id}/move`, { k: 'play', t: [[112, 'C'], [113, 'A'], [114, 'T']] }, b.token)).status, 400, "not Bob's turn");

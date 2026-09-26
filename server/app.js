@@ -7,7 +7,7 @@ import { createWords, HttpError } from './words.js';
 import { createPlayers, cleanName } from './players.js';
 import { createHub } from './hub.js';
 import { createPush } from './push.js';
-import { loadStatic, serveFile } from './static.js';
+import { loadStatic, serveFile, etagMatches } from './static.js';
 import { VARIANTS } from '../shared/words/rules.js';
 
 const SECURITY_HEADERS = {
@@ -58,7 +58,7 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
     const h = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers };
     if (h.ETag) {
       h['Cache-Control'] = 'no-cache';
-      if (req.headers['if-none-match'] === h.ETag) {
+      if (etagMatches(req.headers['if-none-match'], h.ETag)) {
         res.writeHead(304, h);
         return res.end();
       }

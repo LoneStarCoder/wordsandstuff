@@ -127,6 +127,7 @@ export const live = {
         if (retry > 0 || sock.resumed) listeners.forEach(fn => fn({ t: 'resync' }));
         retry = 0;
         sock.resumed = true;
+        sock.authed = true;
       }
       listeners.forEach(fn => fn(msg));
     };
@@ -162,3 +163,10 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
+
+// Fallback for networks that block WebSockets: while the app is visible and
+// the socket isn't up, check for changes every 30 s (usually a tiny 304).
+setInterval(() => {
+  const up = ws && ws.readyState === WebSocket.OPEN && ws.authed;
+  if (wanted && me.token && !document.hidden && !up) listeners.forEach(fn => fn({ t: 'resync' }));
+}, 30_000);
