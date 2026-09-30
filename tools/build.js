@@ -8,7 +8,7 @@ import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import { loadWords, buildDawg } from './dawg-build.js';
-import { pack } from '../shared/words/pack.js';
+import { pack } from '../shared/dict/pack.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const client = join(root, 'client');
@@ -42,8 +42,7 @@ const bundle = async (entry, define) => {
   });
   return res.outputFiles[0].contents;
 };
-const bot = emit('bot', 'js', await bundle('js/words/botworker.js', { DICT_URL: JSON.stringify('/' + dict) }));
-const app = emit('app', 'js', await bundle('js/main.js', { DICT_URL: JSON.stringify('/' + dict), BOT_URL: JSON.stringify('/' + bot) }));
+const app = emit('app', 'js', await bundle('js/main.js', { DICT_URL: JSON.stringify('/' + dict) }));
 
 // 3. Styles
 const css = emit(
@@ -61,17 +60,17 @@ writeFileSync(join(dist, 'index.html'), html);
 writeFileSync(join(dist, 'manifest.webmanifest'), JSON.stringify(JSON.parse(readFileSync(join(client, 'manifest.webmanifest'), 'utf8'))));
 cpSync(join(client, 'icons'), join(dist, 'icons'), { recursive: true });
 
-// 5. Service worker: precache only the small app shell; the bot and the
-//    word list are cached the first time someone plays the bot.
+// 5. Service worker: precache only the small app shell; the word list is
+//    cached the first time someone plays the bot or the daily board.
 const shell = ['/', '/' + app, '/' + css, '/manifest.webmanifest', '/icons/icon.svg'];
-const version = hash(shell.join() + dict + bot);
+const version = hash(shell.join() + dict);
 const sw = readFileSync(join(client, 'sw.js'), 'utf8')
   .replace('__VERSION__', version)
   .replace('__SHELL__', JSON.stringify(shell))
-  .replace('__LAZY__', JSON.stringify(['/' + bot, '/' + dict]));
+  .replace('__LAZY__', JSON.stringify(['/' + dict]));
 writeFileSync(join(dist, 'sw.js'), (await transform(sw, { minify: true, target: 'es2020' })).code);
 
-writeFileSync(join(dist, 'manifest.json'), JSON.stringify({ dict, bot, app, css, version }));
+writeFileSync(join(dist, 'manifest.json'), JSON.stringify({ dict, app, css, version }));
 
 // 6. Precompress
 const report = [];

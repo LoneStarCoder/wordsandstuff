@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildDawg } from '../tools/dawg-build.js';
-import { Dawg } from '../shared/words/dawg.js';
-import { pack, unpack } from '../shared/words/pack.js';
+import { Dawg } from '../shared/dict/dawg.js';
+import { pack, unpack } from '../shared/dict/pack.js';
 import { fullDict } from './helpers.js';
 
 test('small DAWG membership', () => {

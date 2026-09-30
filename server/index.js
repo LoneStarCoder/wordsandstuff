@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createStore } from './store.js';
 import { createApp } from './app.js';
-import { Dawg } from '../shared/words/dawg.js';
-import { unpack } from '../shared/words/pack.js';
+import { Dawg } from '../shared/dict/dawg.js';
+import { unpack } from '../shared/dict/pack.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');

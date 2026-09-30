@@ -49,14 +49,9 @@ function socket(token) {
   return { ws, events, next };
 }
 
-// Put known tiles on a player's rack by editing the stored game.
-async function setRack(gid, seat, rack) {
-  const g = JSON.parse(await store.get('g:' + gid));
-  g.st.r[seat] = rack;
-  await store.set('g:' + gid, JSON.stringify(g));
-}
+import { hashSet, hash32, solve } from '../shared/rush/board.js';
 
-test('two friends play a game through invites, moves, chat and a rematch', async () => {
+test('two friends play a Word Rush match: invite, rounds, recaps, rematch', async () => {
   const a = (await call('POST', '/api/hello', { name: '  Ann  ' })).data;
   const b = (await call('POST', '/api/hello', { name: 'Bob<script>' })).data;
   assert.equal(a.n, 'Ann');
@@ -68,81 +63,97 @@ test('two friends play a game through invites, moves, chat and a rematch', async
   await sa.next(e => e.t === 'hi');
   await sb.next(e => e.t === 'hi');
 
-  const g = (await call('POST', '/api/games', { v: 'classic' }, a.token)).data;
-  assert.equal(g.v, 'classic');
-  assert.equal(g.r.length, 7);
+  const g = (await call('POST', '/api/rush', {}, a.token)).data;
   assert.ok(g.jk);
-  assert.equal(g.pl[1], null);
+  assert.equal(g.next, 0);
+  assert.deepEqual(g.pl, ['Ann', null]);
 
-  // Invite preview, then Bob joins. Ann can't join her own invite as seat 1.
-  const inv = await call('GET', `/api/invite/${g.id}/${g.jk}`);
-  assert.deepEqual(inv.data, { id: g.id, v: 'classic', by: 'Ann' });
+  // Invite preview and join; a third player can't take the seat.
+  assert.deepEqual((await call('GET', `/api/invite/${g.id}/${g.jk}`)).data, { id: g.id, by: 'Ann' });
   assert.equal((await call('GET', `/api/invite/${g.id}/wrong`)).status, 404);
-  assert.equal((await call('GET', `/api/games/${g.id}`, null, b.token)).status, 404, 'not visible before joining');
-  const joined = (await call('POST', `/api/games/${g.id}/join`, { jk: g.jk }, b.token)).data;
+  assert.equal((await call('GET', `/api/rush/${g.id}`, null, b.token)).status, 404, 'not visible before joining');
+  const joined = (await call('POST', `/api/rush/${g.id}/join`, { jk: g.jk }, b.token)).data;
   assert.equal(joined.me, 1);
   assert.equal(joined.jk, undefined);
-  assert.deepEqual(joined.pl, ['Ann', 'Bobscript']);
-  await sa.next(e => e.t === 'join' && e.id === g.id);
-  // A third player can't take the seat.
+  await sa.next(e => e.t === 'up' && e.id === g.id);
   const c = (await call('POST', '/api/hello', { name: 'Cy' })).data;
-  assert.equal((await call('POST', `/api/games/${g.id}/join`, { jk: g.jk }, c.token)).status, 409);
+  assert.equal((await call('POST', `/api/rush/${g.id}/join`, { jk: g.jk }, c.token)).status, 409);
 
-  // Bob can't see Ann's rack.
-  const bobView = (await call('GET', `/api/games/${g.id}`, null, b.token));
-  assert.equal(bobView.data.r.length, 7);
-  assert.equal(bobView.data.rr, undefined);
-  const etag = bobView.headers.get('etag');
-  assert.equal((await call('GET', `/api/games/${g.id}`, null, b.token, { 'If-None-Match': etag })).status, 304);
-  // Edge proxies may hand the browser a weak version of the tag.
-  assert.equal((await call('GET', `/api/games/${g.id}`, null, b.token, { 'If-None-Match': 'W/' + etag })).status, 304);
+  // Rounds must be played in order.
+  assert.equal((await call('POST', `/api/rush/${g.id}/start?r=1`, {}, a.token)).status, 400);
+  assert.equal((await call('POST', `/api/rush/${g.id}/submit?r=0`, { w: [] }, a.token)).status, 400, 'not started');
 
-  await setRack(g.id, 0, 'CATSDOG');
-  assert.equal((await call('POST', `/api/games/${g.id}/move`, { k: 'play', t: [[112, 'C'], [113, 'A'], [114, 'T']] }, b.token)).status, 400, "not Bob's turn");
-  const bad = await call('POST', `/api/games/${g.id}/move`, { k: 'play', t: [[111, 'D'], [112, 'O'], [113, 'G'], [114, 'S'], [115, 'T']] }, a.token);
-  assert.equal(bad.status, 400);
-  assert.deepEqual(bad.data.bad, ['DOGST']);
-  const mv = await call('POST', `/api/games/${g.id}/move`, { k: 'play', t: [[111, 'C'], [112, 'A'], [113, 'T']] }, a.token);
-  assert.equal(mv.status, 200, JSON.stringify(mv.data));
-  assert.equal(mv.data.mv.s, 10);
-  assert.equal(mv.data.r.length, 7);
-  assert.equal(mv.data.turn, 1);
-  const ev = await sb.next(e => e.t === 'mv' && e.id === g.id);
-  assert.equal(ev.d.mv.w[0], 'CAT');
-  assert.equal(ev.d.r.length, 7, "Bob's event carries Bob's rack");
-  assert.equal(ev.d.ver, mv.data.ver);
+  // Ann plays round 1: the hashes identify the real words and nothing else.
+  const st = (await call('POST', `/api/rush/${g.id}/start?r=0`, {}, a.token)).data;
+  assert.equal(st.b.l.length, 16);
+  assert.equal(st.sec, 90);
+  const answers = solve(st.b, fullDict());
+  const set = hashSet(st.h);
+  assert.equal(set.size, answers.length);
+  assert.ok(answers.every(x => set.has(hash32(st.salt + x.w))));
+  assert.ok(!set.has(hash32(st.salt + 'ZZZZ')));
+  // Starting again resumes the same round and clock.
+  assert.equal((await call('POST', `/api/rush/${g.id}/start?r=0`, {}, a.token)).data.st, st.st);
 
-  const chat = await call('POST', `/api/games/${g.id}/chat`, { m: 'nice one' }, b.token);
-  assert.equal(chat.status, 200);
-  assert.equal((await sa.next(e => e.t === 'chat')).c.m, 'nice one');
+  const picks = answers.slice(0, 5).map(x => x.w);
+  const sub = (await call('POST', `/api/rush/${g.id}/submit?r=0`, { w: [...picks, picks[0], 'NOTAWORD', 'zzz'] }, a.token)).data;
+  const expected = answers.slice(0, 5).reduce((s, x) => s + x.s, 0);
+  assert.equal(sub.recap.s, expected);
+  assert.deepEqual(sub.recap.mine.map(x => x.w), picks);
+  assert.equal(sub.recap.opp, null, "Bob hasn't played yet");
+  assert.equal(sub.recap.all.length, answers.length);
+  assert.equal(sub.view.next, 1);
+  assert.equal(sub.view.tot[0], expected);
+  await sb.next(e => e.t === 'up' && e.id === g.id && e.ver === sub.view.ver);
+  // Submitting twice doesn't change anything.
+  assert.equal((await call('POST', `/api/rush/${g.id}/submit?r=0`, { w: answers.map(x => x.w) }, a.token)).data.recap.s, expected);
 
-  const list = await call('GET', '/api/games', null, b.token);
-  assert.equal(list.data.length, 1);
-  assert.equal(list.data[0].opp, 'Ann');
-  assert.equal(list.data[0].turn, 1);
-  assert.equal((await call('GET', '/api/games', null, b.token, { 'If-None-Match': list.headers.get('etag') })).status, 304);
+  // Bob sees Ann's score but not her words until he's played.
+  const bv = await call('GET', `/api/rush/${g.id}`, null, b.token);
+  assert.equal(bv.data.r[0][0].s, expected);
+  assert.equal((await call('GET', `/api/rush/${g.id}/recap?r=0`, null, b.token)).status, 400);
+  assert.equal((await call('GET', `/api/rush/${g.id}`, null, b.token, { 'If-None-Match': bv.headers.get('etag') })).status, 304);
+  assert.equal((await call('GET', `/api/rush/${g.id}`, null, b.token, { 'If-None-Match': 'W/' + bv.headers.get('etag') })).status, 304);
 
-  // Rename flows into games.
-  await call('POST', '/api/me', { name: 'Bobby' }, b.token);
-  assert.deepEqual((await call('GET', `/api/games/${g.id}`, null, a.token)).data.pl, ['Ann', 'Bobby']);
+  await call('POST', `/api/rush/${g.id}/start?r=0`, {}, b.token);
+  const bsub = (await call('POST', `/api/rush/${g.id}/submit?r=0`, { w: [answers[0].w] }, b.token)).data;
+  assert.deepEqual(bsub.recap.opp.w.map(x => x.w), picks, 'now Bob sees what Ann found');
 
-  // Bob resigns by removing the game; Ann wins and both can rematch into one game.
-  assert.equal((await call('DELETE', `/api/games/${g.id}`, null, b.token)).status, 200);
-  const over = (await call('GET', `/api/games/${g.id}`, null, a.token)).data;
+  // Everyone plays the rest; then the match is over.
+  for (const p of [a, b]) for (const r of [1, 2]) {
+    if (p === b && r === 0) continue;
+    await call('POST', `/api/rush/${g.id}/start?r=${r}`, {}, p.token);
+    await call('POST', `/api/rush/${g.id}/submit?r=${r}`, { w: [] }, p.token);
+  }
+  const over = (await call('GET', `/api/rush/${g.id}`, null, a.token)).data;
   assert.equal(over.over, true);
-  assert.equal(over.win, 0);
-  assert.equal((await call('GET', '/api/games', null, b.token)).data.length, 0);
-  const r1 = (await call('POST', '/api/games', { rematch: g.id }, a.token)).data;
-  assert.equal(r1.me, 1, 'Ann moved first last time, so Bob starts');
-  await sb.next(e => e.t === 'new' && e.id === r1.id);
-  const r2 = (await call('POST', '/api/games', { rematch: g.id }, b.token)).data;
+  assert.equal(over.win, over.tot[0] > over.tot[1] ? 0 : 1);
+  assert.equal(over.next, -1);
+
+  const list = (await call('GET', '/api/rush', null, b.token));
+  assert.equal(list.data.length, 1);
+  assert.equal((await call('GET', '/api/rush', null, b.token, { 'If-None-Match': list.headers.get('etag') })).status, 304);
+
+  // Rename flows into matches.
+  await call('POST', '/api/me', { name: 'Bobby' }, b.token);
+  assert.deepEqual((await call('GET', `/api/rush/${g.id}`, null, a.token)).data.pl, ['Ann', 'Bobby']);
+
+  // Both asking for a rematch get the same new match.
+  const r1 = (await call('POST', '/api/rush', { rematch: g.id }, b.token)).data;
+  await sa.next(e => e.t === 'up' && e.id === r1.id);
+  const r2 = (await call('POST', '/api/rush', { rematch: g.id }, a.token)).data;
   assert.equal(r2.id, r1.id);
-  assert.equal(r2.me, 0);
+
+  // Leaving an unfinished match forfeits it.
+  await call('DELETE', `/api/rush/${r1.id}`, null, b.token);
+  const ff = (await call('GET', `/api/rush/${r1.id}`, null, a.token)).data;
+  assert.equal(ff.over, true);
+  assert.equal(ff.win, ff.me);
 
   // An unjoined invite is deleted outright.
-  const lonely = (await call('POST', '/api/games', { v: 'modern' }, a.token)).data;
-  await call('DELETE', `/api/games/${lonely.id}`, null, a.token);
-  assert.equal(await store.get('g:' + lonely.id), null);
+  const lonely = (await call('POST', '/api/rush', {}, a.token)).data;
+  await call('DELETE', `/api/rush/${lonely.id}`, null, a.token);
+  assert.equal(await store.get('r:' + lonely.id), null);
 
   sa.ws.close();
   sb.ws.close();
@@ -152,13 +163,11 @@ test('bad input is rejected politely', async () => {
   assert.equal((await fetch(base + '/ws')).status, 426);
   assert.equal((await call('POST', '/api/hello', { name: '   ' })).status, 400);
   const a = (await call('POST', '/api/hello', { name: 'Zed' })).data;
-  const g = (await call('POST', '/api/games', { v: 'nope' }, a.token)).data;
-  assert.equal(g.v, 'modern');
-  for (const body of [{ k: 'play', t: 'x' }, { k: 'play', t: [[999, 'A']] }, { k: 'play', t: [[112, '1']] }, { k: 'fly' }, { k: 'swap', t: ['Q', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'] }]) {
-    const r = await call('POST', `/api/games/${g.id}/move`, body, a.token);
-    assert.equal(r.status, 400, JSON.stringify(body));
-  }
-  assert.equal((await call('POST', `/api/games/${g.id}/chat`, { m: '   ' }, a.token)).status, 400);
+  const g = (await call('POST', '/api/rush', {}, a.token)).data;
+  for (const r of ['x', '-1', '3', '1.5']) assert.equal((await call('POST', `/api/rush/${g.id}/start?r=${r}`, {}, a.token)).status, 400, r);
+  assert.equal((await call('POST', `/api/rush/nope-nope/start?r=0`, {}, a.token)).status, 404);
+  await call('POST', `/api/rush/${g.id}/start?r=0`, {}, a.token);
+  assert.equal((await call('POST', `/api/rush/${g.id}/submit?r=0`, { w: 'CAT' }, a.token)).data.recap.s, 0);
   const res = await fetch(base + '/api/hello', { method: 'POST', body: '{bad' });
   assert.equal(res.status, 400);
 });

@@ -26,7 +26,7 @@ export const me = {
   },
   forget() {
     local.del('wns.token');
-    local.del('wns.list');
+    local.del('wns.rlist');
   },
 };
 
@@ -92,7 +92,7 @@ export function ensureMe(reason = 'Pick a name your friends will see.') {
     };
     input.addEventListener('keydown', e => e.key === 'Enter' && go());
     const btn = h('button.primary.block', { onclick: go }, 'Continue');
-    const s = sheet('Hi there!', h('div.stack', h('p.muted', reason), input, btn, h('p.small.muted', 'No sign-up needed. Your games stay on this device (you can move them later).')), {
+    const s = sheet('Hi there!', h('div.stack', h('p.muted', reason), input, btn, h('p.small.muted', 'No sign-up needed. Your matches stay on this device (you can move them later).')), {
       onClose: () => !done && resolve(false),
     });
   });

@@ -4,17 +4,21 @@ import { me } from './net.js';
 import { hubScreen } from './hub.js';
 import { joinScreen } from './join.js';
 import { transferScreen } from './transfer.js';
-import { lobbyScreen } from './words/lobby.js';
-import { gameScreen } from './words/game.js';
-import { OnlineSource, BotSource } from './words/sources.js';
+import { lobbyScreen } from './rush/lobby.js';
+import { matchScreen, roundScreen, dailyScreen } from './rush/match.js';
+import { OnlineMatch, BotMatch } from './rush/sources.js';
 
 // Each route returns a cleanup function, or a path to redirect to.
 const routes = [
   [/^\/$/, 'Words and Stuff', root => hubScreen(root)],
-  [/^\/words$/, 'Words', root => lobbyScreen(root)],
-  [/^\/words\/bot\/([\w-]+)$/, 'Words', (root, id) => gameScreen(root, new BotSource(id))],
-  [/^\/words\/([\w-]+)$/, 'Words', (root, id) => (me.token ? gameScreen(root, new OnlineSource(id)) : '/words')],
-  [/^\/join\/([\w-]+)\/([\w-]+)$/, 'Join a game', (root, gid, jk) => joinScreen(root, gid, jk)],
+  [/^\/rush$/, 'Word Rush', root => lobbyScreen(root)],
+  [/^\/rush\/daily$/, 'Daily board', root => dailyScreen(root)],
+  [/^\/rush\/bot\/([\w-]+)$/, 'Word Rush', (root, id) => matchScreen(root, new BotMatch(id))],
+  [/^\/rush\/bot\/([\w-]+)\/([0-2])$/, 'Word Rush', (root, id, r) => roundScreen(root, new BotMatch(id), +r)],
+  [/^\/rush\/([\w-]+)$/, 'Word Rush', (root, id) => (me.token ? matchScreen(root, new OnlineMatch(id)) : '/rush')],
+  [/^\/rush\/([\w-]+)\/([0-2])$/, 'Word Rush', (root, id, r) => (me.token ? roundScreen(root, new OnlineMatch(id), +r) : '/rush')],
+  [/^\/words(\/.*)?$/, 'Word Rush', () => '/rush'],
+  [/^\/join\/([\w-]+)\/([\w-]+)$/, 'Join a match', (root, gid, jk) => joinScreen(root, gid, jk)],
   [/^\/transfer$/, 'Words and Stuff', root => transferScreen(root)],
 ];
 

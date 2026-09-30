@@ -8,7 +8,7 @@ export function transferScreen(root) {
   history.replaceState(null, '', '/transfer'); // don't keep the token in history
   const box = h('div.page.center-page', h('p.muted', 'Checking link…'));
   root.append(box);
-  const fail = msg => set(box, h('div.card.invite', h('h1', 'Link not valid'), h('p.muted', msg), h('a.button.primary', { href: '/words' }, 'Go to Words')));
+  const fail = msg => set(box, h('div.card.invite', h('h1', 'Link not valid'), h('p.muted', msg), h('a.button.primary', { href: '/rush' }, 'Go to Word Rush')));
   if (!token) {
     fail('This link is incomplete.');
     return;
@@ -21,13 +21,13 @@ export function transferScreen(root) {
         h(
           'div.card.invite',
           h('h1', `Continue as ${data.n}?`),
-          h('p.muted', 'Your games will show up on this device.'),
-          replacing && h('p.small.warn', `This device is currently playing as ${replacing}. Those games will no longer show here.`),
+          h('p.muted', 'Your matches will show up on this device.'),
+          replacing && h('p.small.warn', `This device is currently playing as ${replacing}. Those matches will no longer show here.`),
           h('button.primary.big-btn', {
             onclick: () => {
               me.forget();
               me.save(token, data.n);
-              go('/words', true);
+              go('/rush', true);
             },
           }, `Continue as ${data.n}`),
         ),

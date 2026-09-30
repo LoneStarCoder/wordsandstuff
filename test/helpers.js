@@ -1,9 +1,13 @@
 import { loadWords, buildDawg } from '../tools/dawg-build.js';
-import { Dawg } from '../shared/words/dawg.js';
+import { Dawg } from '../shared/dict/dawg.js';
 
 const data = f => new URL('../data/' + f, import.meta.url).pathname;
 
-let cached;
+let cached, list;
+export function words() {
+  list ||= loadWords([data('enable1.txt'), data('supplement.txt')]).map(w => w.toUpperCase());
+  return list;
+}
 export function fullDict() {
   cached ||= new Dawg(buildDawg(loadWords([data('enable1.txt'), data('supplement.txt')])));
   return cached;

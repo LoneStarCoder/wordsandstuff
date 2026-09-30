@@ -1,7 +1,7 @@
-// Builds the packed DAWG described in shared/words/dawg.js from a word list,
+// Builds the packed DAWG described in shared/dict/dawg.js from a word list,
 // using the incremental algorithm for sorted input (Daciuk et al., 2000).
 import { readFileSync } from 'node:fs';
-import { LETTER, END, LAST, SHIFT } from '../shared/words/dawg.js';
+import { LETTER, END, LAST, SHIFT } from '../shared/dict/dawg.js';
 
 export function loadWords(files, maxLen = 15) {
   const set = new Set();

@@ -2,7 +2,7 @@
 // store only a hash of the secret. Anyone holding the token is that player,
 // which is how "move to another device" links work.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { newId, HttpError, TTL } from './words.js';
+import { newId, HttpError, TTL } from './util.js';
 
 const hash = s => createHash('sha256').update(s).digest();
 

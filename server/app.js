@@ -3,12 +3,12 @@
 import http from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { createWords, HttpError } from './words.js';
+import { createRush } from './rush.js';
+import { HttpError } from './util.js';
 import { createPlayers, cleanName } from './players.js';
 import { createHub } from './hub.js';
 import { createPush } from './push.js';
 import { loadStatic, serveFile, etagMatches } from './static.js';
-import { VARIANTS } from '../shared/words/rules.js';
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -29,7 +29,7 @@ function limiter(max, windowMs) {
 }
 
 export async function createApp({ store, dict, staticDir, publicUrl = 'http://localhost', log = console }) {
-  const words = createWords({ store, dict });
+  const rush = createRush({ store, dict });
   const players = createPlayers({ store });
   const files = loadStatic(staticDir);
   const push = await createPush({ store, players, subject: publicUrl.startsWith('https:') ? publicUrl : 'mailto:noreply@example.com' });
@@ -37,7 +37,6 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
   const limits = {
     api: limiter(240, 60_000),
     hello: limiter(20, 3_600_000),
-    chat: limiter(30, 60_000),
   };
 
   const server = http.createServer((req, res) => {
@@ -99,35 +98,29 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
     return p;
   }
 
-  // Tell the other player (live if connected, otherwise by push) and the
-  // mover's other devices.
-  function notify(g, fromSeat, event, pushMsg) {
+  // Tell both players' devices that a match changed; the other player gets
+  // a push notification if they have no app open.
+  function notify(g, fromSeat, pushBody) {
     for (const seat of [0, 1]) {
       const p = g.pl[seat];
       if (!p) continue;
-      const delivered = hub.send(p.id, event(seat));
-      if (seat !== fromSeat && !delivered && pushMsg) {
-        push.send(p.id, { ...pushMsg, url: '/words/' + g.id, tag: g.id }).catch(e => log.error('push', e));
+      const delivered = hub.send(p.id, { t: 'up', id: g.id, ver: g.ver });
+      if (seat !== fromSeat && !delivered && pushBody) {
+        push.send(p.id, { title: 'Words and Stuff', body: pushBody, url: '/rush/' + g.id, tag: g.id }).catch(e => log.error('push', e));
       }
     }
   }
 
-  function describeMove(g, move) {
-    const who = g.pl[move.p]?.n || 'Your friend';
-    const over = g.st.over ? ' Game over!' : ' Your turn.';
-    if (move.k === 'play') return `${who} played ${move.w[0]} for ${move.s}.${over}`;
-    if (move.k === 'swap') return `${who} swapped tiles.${over}`;
-    if (move.k === 'pass') return `${who} passed.${over}`;
-    return `${who} resigned.`;
-  }
-
-  function moved(g, seat, move) {
-    notify(
-      g,
-      seat,
-      s => ({ t: 'mv', id: g.id, d: words.delta(g, s, move) }),
-      { title: 'Words and Stuff', body: describeMove(g, move) },
-    );
+  function roundMessage(g, seat, r) {
+    const who = g.pl[seat].n, other = 1 - seat;
+    const s = g.res[seat][r].s;
+    if (rush.isOver(g)) {
+      const v = rush.view(g, other);
+      const mine = v.tot[other], theirs = v.tot[seat];
+      return `${who} finished. ${v.win === 2 ? "It's a tie" : v.win === other ? 'You won' : `${who} won`} ${Math.max(mine, theirs)}–${Math.min(mine, theirs)}!`;
+    }
+    const behind = rush.nextRound(g, other) >= 0 && rush.nextRound(g, other) <= r;
+    return `${who} scored ${s} in round ${r + 1}.${behind ? ' Your turn — can you beat it?' : ''}`;
   }
 
   async function handle(req, res) {
@@ -168,7 +161,7 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
     const send = (data, status = 200, headers) => json(req, res, status, data, headers);
 
     if (m === 'GET' && a === 'config') {
-      return send({ push: push.publicKey, variants: Object.fromEntries(Object.entries(VARIANTS).map(([k, v]) => [k, v.name])) }, 200, { 'Cache-Control': 'public, max-age=3600' });
+      return send({ push: push.publicKey }, 200, { 'Cache-Control': 'public, max-age=3600' });
     }
 
     // New player: just a name.
@@ -181,7 +174,7 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
 
     // Public invite details (no auth needed).
     if (m === 'GET' && a === 'invite' && b && c) {
-      const inv = await words.invite(b, c);
+      const inv = await rush.invite(b, c);
       if (!inv) throw new HttpError(404, 'That invite has expired or was already used.');
       return send(inv);
     }
@@ -194,7 +187,7 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
         const body = await readBody(req);
         me.n = cleanName(body.name);
         await players.save(me);
-        await words.rename(me);
+        await rush.rename(me);
         return send({ id: me.id, n: me.n });
       }
     }
@@ -211,61 +204,60 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
       }
     }
 
-    if (a === 'games' && !b) {
+    const tagged = (g, seat) => send(rush.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });
+
+    if (a === 'rush' && !b) {
       if (m === 'GET') {
-        const list = await words.list(me.id);
-        const body = JSON.stringify(list);
-        const etag = '"' + createHash('sha1').update(body).digest('base64url').slice(0, 16) + '"';
+        const list = await rush.list(me.id);
+        const etag = '"' + createHash('sha1').update(JSON.stringify(list)).digest('base64url').slice(0, 16) + '"';
         return send(list, 200, { ETag: etag });
       }
       if (m === 'POST') {
         const body = await readBody(req);
         if (body.rematch) {
-          const { g, created, other } = await words.rematch(me, String(body.rematch));
+          const { g, created, other } = await rush.rematch(me, String(body.rematch));
           if (created) {
-            notify(g, 0, () => ({ t: 'new', id: g.id }), null);
-            if (!hub.online(other.id)) push.send(other.id, { title: 'Words and Stuff', body: `${me.n} wants a rematch!`, url: '/words/' + g.id, tag: g.id }).catch(() => {});
+            notify(g, 0, null);
+            if (!hub.online(other.id)) push.send(other.id, { title: 'Words and Stuff', body: `${me.n} wants a rematch!`, url: '/rush/' + g.id, tag: g.id }).catch(() => {});
           }
-          const seat = words.seatOf(g, me.id);
-          return send(words.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });
+          return tagged(g, rush.seatOf(g, me.id));
         }
-        const g = await words.create(me, VARIANTS[body.v] ? body.v : 'modern');
-        return send(words.view(g, 0), 200, { ETag: `"${g.ver}.0"` });
+        return tagged(await rush.create(me), 0);
       }
     }
 
-    if (a === 'games' && b) {
+    if (a === 'rush' && b) {
+      const round = () => {
+        const r = Number(url.searchParams.get('r'));
+        if (!Number.isInteger(r) || r < 0 || r > 2) throw new HttpError(400, 'Bad round.');
+        return r;
+      };
       if (m === 'GET' && !c) {
-        const { g, seat } = await words.get(me.id, b);
-        return send(words.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });
+        const { g, seat } = await rush.get(me.id, b);
+        return tagged(g, seat);
       }
       if (m === 'POST' && c === 'join') {
         const body = await readBody(req);
-        const { g, seat, joined } = await words.join(me, b, String(body.jk || ''));
-        if (joined) {
-          notify(g, 1, () => ({ t: 'join', id: g.id, ver: g.ver, n: me.n }), {
-            title: 'Words and Stuff',
-            body: `${me.n} joined your game!${g.st.turn === 1 ? '' : ' Your turn.'}`,
-          });
-        }
-        return send(words.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });
+        const { g, seat, joined } = await rush.join(me, b, String(body.jk || ''));
+        if (joined) notify(g, 1, `${me.n} joined your match!`);
+        return tagged(g, seat);
       }
-      if (m === 'POST' && c === 'move') {
-        const body = await readBody(req);
-        const { g, seat, move } = await words.move(me, b, body);
-        moved(g, seat, move);
-        return send(words.delta(g, seat, move));
+      if (m === 'POST' && c === 'start') {
+        return send(await rush.start(me, b, round()));
       }
-      if (m === 'POST' && c === 'chat') {
-        if (!limits.chat(me.id)) throw new HttpError(429, 'Slow down a little.');
+      if (m === 'POST' && c === 'submit') {
         const body = await readBody(req);
-        const { g, seat, c: msg } = await words.chat(me, b, body.m);
-        notify(g, seat, () => ({ t: 'chat', id: g.id, ver: g.ver, c: msg }), { title: g.pl[seat].n, body: msg.m });
-        return send({ ver: g.ver, c: msg });
+        const { g, seat, r } = await rush.submit(me, b, round(), body.w);
+        notify(g, seat, roundMessage(g, seat, r));
+        return send({ view: rush.view(g, seat), recap: rush.recap(g, seat, r) });
+      }
+      if (m === 'GET' && c === 'recap') {
+        const { g, seat } = await rush.get(me.id, b);
+        return send(rush.recap(g, seat, round()), 200, { ETag: `"${g.ver}.${seat}.r"` });
       }
       if (m === 'DELETE' && !c) {
-        const { g, seat, move } = await words.remove(me, b);
-        if (move) moved(g, seat, move);
+        const { g, seat, forfeited } = await rush.remove(me, b);
+        if (forfeited) notify(g, seat, `${me.n} left the match. You win!`);
         return send({ ok: true });
       }
     }
