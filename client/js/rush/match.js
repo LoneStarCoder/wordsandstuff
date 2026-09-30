@@ -202,18 +202,7 @@ export function dailyScreen(root) {
         board,
         h('h2', "Today's scores"),
         h('p.muted.small', 'Add your score to see how everyone else did today.'),
-        h('button.primary', {
-          onclick: async e => {
-            if (!(await ensureMe('Pick a name for the daily scoreboard.'))) return;
-            e.target.disabled = true;
-            try {
-              renderBoard(await daily.post());
-            } catch (err) {
-              toast(err.message);
-              e.target.disabled = false;
-            }
-          },
-        }, 'Add my score'),
+        h('button.primary', { onclick: addScore }, 'Add my score'),
       );
     }
     const mine = rows?.findIndex(x => x.me);
@@ -260,6 +249,17 @@ export function dailyScreen(root) {
     );
     renderBoard(daily.cachedScores());
     if (me.token) refresh();
+    else if (!r.sent) addScore();
+  }
+
+  // No name yet: ask right away so the score reaches the leaderboard.
+  async function addScore() {
+    if (!(await ensureMe('Pick a name to put your score on today’s leaderboard.'))) return;
+    try {
+      renderBoard(await daily.post());
+    } catch (e) {
+      toast(e.message);
+    }
   }
 
   if (dailyResult()) showRecap().catch(e => toast(e.message));

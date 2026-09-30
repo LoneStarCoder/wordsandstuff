@@ -79,7 +79,7 @@ export function lobbyScreen(root) {
         'a.daily-card' + (r ? '.done' : ''),
         { href: '/rush/daily' },
         h('div.daily-art', [...'DAY'].map(c => h('span.tile', h('span.l', c)))),
-        h('div.card-body', h('b', 'Daily board'), h('span.small', r ? `Today: ${r.s} points${rank()}` : 'Same board for everyone today')),
+        h('div.card-body', h('b', 'Daily board'), h('span.small', r ? `Today: ${r.s} points${r.sent ? rank() : ' · tap to add it to the leaderboard'}` : 'Same board for everyone today')),
         h('span.daily-side', streak ? `🔥 ${streak}` : '', h('span.chev', r ? 'See' : 'Play')),
       ),
     );

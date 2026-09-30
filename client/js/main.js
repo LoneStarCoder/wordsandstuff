@@ -56,10 +56,13 @@ document.addEventListener('click', e => {
 render();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const reg = navigator.serviceWorker.register('/sw.js').catch(() => null);
+  // Look for a new version whenever the app comes back to the screen.
+  document.addEventListener('visibilitychange', () => !document.hidden && reg.then(r => r?.update().catch(() => {})));
   let hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController) reloadOnNextNav();
+    // A new version is ready: switch now unless a round is being played.
+    if (hadController) document.querySelector('.play .grid') ? reloadOnNextNav() : location.reload();
     hadController = true;
   });
   // Notification taps while the app is open.
