@@ -1559,3 +1559,74 @@ button.big span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---- Daily leaderboard ---- */
+
+.leaders {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.leaders h2 {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.leaders p {
+  margin: 0 0 8px;
+}
+
+.leaders-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.leader-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.leader-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.leader-list li:last-child {
+  border-bottom: 0;
+}
+
+.leader-list li.me {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.leader-list .rank {
+  width: 1.8em;
+  text-align: center;
+  font-weight: 800;
+}
+
+.leader-list .who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leader-list .pts {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

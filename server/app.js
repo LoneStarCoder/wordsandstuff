@@ -4,6 +4,7 @@ import http from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { createRush } from './rush.js';
+import { createDaily } from './daily.js';
 import { HttpError } from './util.js';
 import { createPlayers, cleanName } from './players.js';
 import { createHub } from './hub.js';
@@ -30,6 +31,7 @@ function limiter(max, windowMs) {
 
 export async function createApp({ store, dict, staticDir, publicUrl = 'http://localhost', log = console }) {
   const rush = createRush({ store, dict });
+  const daily = createDaily({ store, dict });
   const players = createPlayers({ store });
   const files = loadStatic(staticDir);
   const push = await createPush({ store, players, subject: publicUrl.startsWith('https:') ? publicUrl : 'mailto:noreply@example.com' });
@@ -202,6 +204,11 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
         await push.unsubscribe(me, String(body.endpoint || ''));
         return send({ ok: true });
       }
+    }
+
+    if (a === 'daily' && b) {
+      if (m === 'GET') return send(await daily.scores(me, b));
+      if (m === 'POST') return send(await daily.submit(me, b, (await readBody(req)).w));
     }
 
     const tagged = (g, seat) => send(rush.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });

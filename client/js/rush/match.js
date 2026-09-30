@@ -1,7 +1,7 @@
 // Match overview, round play/recap routes, and the daily board.
 import { h, set, toast, sheet, confirm, initial, local } from '../dom.js';
 import { go } from '../nav.js';
-import { me } from '../net.js';
+import { me, ensureMe } from '../net.js';
 import { ROUNDS } from '../../../shared/rush/board.js';
 import { shareInvite, howToPlay, recapView, copyText } from './common.js';
 import { playScreen } from './play.js';
@@ -192,6 +192,56 @@ export function dailyScreen(root) {
     return `Words and Stuff · Daily Word Rush ${d.getMonth() + 1}/${d.getDate()}\n${r.s} points · ${r.n}/${r.of} words${r.best ? ` · best: ${r.best}` : ''}\n${location.origin}/rush/daily`;
   };
 
+  const board = h('div.leaders');
+
+  // Today's scores from everyone who played.
+  function renderBoard(rows, note) {
+    const r = dailyResult();
+    if (!me.token || !r?.sent) {
+      return set(
+        board,
+        h('h2', "Today's scores"),
+        h('p.muted.small', 'Add your score to see how everyone else did today.'),
+        h('button.primary', {
+          onclick: async e => {
+            if (!(await ensureMe('Pick a name for the daily scoreboard.'))) return;
+            e.target.disabled = true;
+            try {
+              renderBoard(await daily.post());
+            } catch (err) {
+              toast(err.message);
+              e.target.disabled = false;
+            }
+          },
+        }, 'Add my score'),
+      );
+    }
+    const mine = rows?.findIndex(x => x.me);
+    set(
+      board,
+      h('div.leaders-head', h('h2', "Today's scores"), h('button.link', { onclick: refresh }, 'Refresh')),
+      rows && mine >= 0 && h('p.small.muted', `You're #${mine + 1} of ${rows.length}${rows.length === 1 ? ' — share the board so friends can join in!' : ''}`),
+      note && h('p.small.muted', note),
+      rows
+        ? h(
+            'ol.leader-list',
+            rows.map((x, k) =>
+              h('li' + (x.me ? '.me' : ''), h('span.rank', k < 3 ? ['🥇', '🥈', '🥉'][k] : String(k + 1)), h('span.who', x.me ? `${x.n} (you)` : x.n), h('span.best.small.muted', x.b ? x.b : ''), h('span.pts', h('b', String(x.s)), h('small', ` · ${x.c}w`))),
+            ),
+          )
+        : h('p.muted.small', 'Loading…'),
+    );
+  }
+
+  async function refresh() {
+    try {
+      const r = dailyResult();
+      renderBoard(r.sent ? await daily.scores() : await daily.post());
+    } catch (e) {
+      renderBoard(daily.cachedScores(), e.status === 0 ? 'Offline — showing saved scores.' : e.message);
+    }
+  }
+
   async function showRecap() {
     const recap = await daily.recap();
     if (!alive) return;
@@ -204,9 +254,12 @@ export function dailyScreen(root) {
         'div.page',
         h('header.top', h('a.icon-btn', { href: '/rush', 'aria-label': 'Back' }, '‹'), h('h1', 'Daily board')),
         h('p.center.streak', streak > 1 ? `🔥 ${streak}-day streak` : 'Come back tomorrow for a new board!'),
+        board,
         recapView(recap, { actions: [h('button.primary', { onclick: share }, 'Share score'), h('a.button', { href: '/rush' }, 'Done')] }),
       ),
     );
+    renderBoard(daily.cachedScores());
+    if (me.token) refresh();
   }
 
   if (dailyResult()) showRecap().catch(e => toast(e.message));

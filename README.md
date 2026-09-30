@@ -10,7 +10,8 @@ as many words as you can.
   then compare words afterwards. There are turn notifications and rematches.
 - **Play the bot** (Easy / Medium / Hard). It plays each round alongside you,
   with a live score ticker. It runs on your device and works offline.
-- **Daily board.** One board a day, the same for everyone, with a streak and a
+- **Daily board.** One board a day, the same for everyone, with a shared
+  leaderboard of today's scores (re-scored by the server), a streak and a
   shareable score.
 - Bonus tiles (double/triple letter, double word, and a triple-word tile in the
   final round), long-word bonuses, the path lighting up green on real words,
@@ -42,6 +43,7 @@ shared/
   dict/           packed dictionary (DAWG) reader + transport format
 server/           Node http server: JSON API, WebSocket, static files
   rush.js         friend matches, per-player views, access control
+  daily.js        daily board leaderboard
   store.js        Redis (Render Key Value) or in-memory storage
   push.js         Web Push "your turn" notifications (VAPID)
 tools/build.js    bundles, fingerprints and precompresses into dist/

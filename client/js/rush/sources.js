@@ -274,6 +274,26 @@ export class Daily {
     return this.recap();
   }
 
+  // Sends today's words to the shared leaderboard (the server re-scores
+  // them) and returns everyone's scores. Needs a player name.
+  async post() {
+    const result = dailyResult(this.day);
+    const { data } = await api('POST', 'daily/' + this.day, { w: result.w });
+    local.set('wns.daily.' + this.day, { ...result, sent: true });
+    local.set('wns.dailyTable.' + this.day, data);
+    return data;
+  }
+
+  async scores() {
+    const { data } = await api('GET', 'daily/' + this.day, null, { quiet: true });
+    local.set('wns.dailyTable.' + this.day, data);
+    return data;
+  }
+
+  cachedScores() {
+    return local.get('wns.dailyTable.' + this.day);
+  }
+
   async recap() {
     const { board, all } = await this.start();
     const result = dailyResult(this.day);

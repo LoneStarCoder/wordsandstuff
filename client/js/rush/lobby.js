@@ -2,7 +2,7 @@
 import { h, set, local, sheet, toast, timeAgo, initial } from '../dom.js';
 import { api, me, ensureMe, live } from '../net.js';
 import { go } from '../nav.js';
-import { listBotMatches, newBotMatch, dailyResult, dailyStreak } from './sources.js';
+import { listBotMatches, newBotMatch, dailyResult, dailyStreak, today } from './sources.js';
 import { shareInvite, howToPlay, copyText } from './common.js';
 import { pushStatus, enablePush, disablePush, pushNudge } from '../push.js';
 
@@ -63,6 +63,13 @@ export function lobbyScreen(root) {
     ),
   );
 
+  // "· #2 of 7" from the last leaderboard we saw today.
+  function rank() {
+    const rows = local.get('wns.dailyTable.' + today());
+    const k = rows?.findIndex(x => x.me) ?? -1;
+    return k >= 0 ? ` · #${k + 1} of ${rows.length}` : '';
+  }
+
   function renderDaily() {
     const r = dailyResult();
     const streak = dailyStreak();
@@ -72,7 +79,7 @@ export function lobbyScreen(root) {
         'a.daily-card' + (r ? '.done' : ''),
         { href: '/rush/daily' },
         h('div.daily-art', [...'DAY'].map(c => h('span.tile', h('span.l', c)))),
-        h('div.card-body', h('b', 'Daily board'), h('span.small', r ? `Today: ${r.s} points · ${r.n} words` : 'Same board for everyone today')),
+        h('div.card-body', h('b', 'Daily board'), h('span.small', r ? `Today: ${r.s} points${rank()}` : 'Same board for everyone today')),
         h('span.daily-side', streak ? `🔥 ${streak}` : '', h('span.chev', r ? 'See' : 'Play')),
       ),
     );

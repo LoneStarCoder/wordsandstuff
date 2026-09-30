@@ -171,3 +171,25 @@ test('bad input is rejected politely', async () => {
   const res = await fetch(base + '/api/hello', { method: 'POST', body: '{bad' });
   assert.equal(res.status, 400);
 });
+
+test('daily board: server re-scores words and ranks everyone', async () => {
+  const { dailyBoard } = await import('../server/daily.js');
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const answers = solve(dailyBoard(day, fullDict()), fullDict());
+  const a = (await call('POST', '/api/hello', { name: 'Dee' })).data;
+  const b = (await call('POST', '/api/hello', { name: 'Eli' })).data;
+  assert.deepEqual((await call('GET', `/api/daily/${day}`, null, a.token)).data, []);
+  const top = answers.slice(0, 3);
+  const ra = (await call('POST', `/api/daily/${day}`, { w: [...top.map(x => x.w), top[0].w, 'FAKEWORD'] }, a.token)).data;
+  assert.deepEqual(ra, [{ n: 'Dee', s: top.reduce((t, x) => t + x.s, 0), c: 3, b: top[0].w, me: true }]);
+  // Only the first submission counts.
+  await call('POST', `/api/daily/${day}`, { w: answers.map(x => x.w) }, a.token);
+  await call('POST', `/api/daily/${day}`, { w: [answers[5].w] }, b.token);
+  const table = (await call('GET', `/api/daily/${day}`, null, b.token)).data;
+  assert.deepEqual(table.map(x => [x.n, x.me || false]), [['Dee', false], ['Eli', true]]);
+  assert.equal(table[0].s, ra[0].s);
+  // Old or malformed dates are refused.
+  assert.equal((await call('POST', '/api/daily/2020-01-01', { w: [] }, a.token)).status, 400);
+  assert.equal((await call('GET', '/api/daily/nope', null, a.token)).status, 400);
+});
