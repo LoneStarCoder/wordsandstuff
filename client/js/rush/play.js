@@ -56,7 +56,7 @@ export function playScreen(root, opts) {
 
   function countdown() {
     return new Promise(resolve => {
-      const big = h('div.count', '3');
+      const big = h('div.countdown', '3');
       set(el, h('div.ready', big));
       let n = 3;
       sfx.count();

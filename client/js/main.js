@@ -7,6 +7,7 @@ import { transferScreen } from './transfer.js';
 import { lobbyScreen } from './rush/lobby.js';
 import { matchScreen, roundScreen, dailyScreen } from './rush/match.js';
 import { OnlineMatch, BotMatch } from './rush/sources.js';
+import { secretLobby, challengeScreen, secretDaily, secretPractice } from './secret/screens.js';
 
 // Each route returns a cleanup function, or a path to redirect to.
 const routes = [
@@ -17,6 +18,10 @@ const routes = [
   [/^\/rush\/bot\/([\w-]+)\/([0-2])$/, 'Word Rush', (root, id, r) => roundScreen(root, new BotMatch(id), +r)],
   [/^\/rush\/([\w-]+)$/, 'Word Rush', (root, id) => (me.token ? matchScreen(root, new OnlineMatch(id)) : '/rush')],
   [/^\/rush\/([\w-]+)\/([0-2])$/, 'Word Rush', (root, id, r) => (me.token ? roundScreen(root, new OnlineMatch(id), +r) : '/rush')],
+  [/^\/secret$/, 'Secret Word', root => secretLobby(root)],
+  [/^\/secret\/daily$/, 'Daily word', root => secretDaily(root)],
+  [/^\/secret\/practice$/, 'Secret Word', root => secretPractice(root)],
+  [/^\/secret\/([\w-]+)$/, 'Secret Word', (root, id) => (me.token ? challengeScreen(root, id) : '/secret')],
   [/^\/words(\/.*)?$/, 'Word Rush', () => '/rush'],
   [/^\/join\/([\w-]+)\/([\w-]+)$/, 'Join a match', (root, gid, jk) => joinScreen(root, gid, jk)],
   [/^\/transfer$/, 'Words and Stuff', root => transferScreen(root)],

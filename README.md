@@ -1,7 +1,21 @@
 # Words and Stuff
 
-Little web games to play with friends. The first one is **Word Rush**: 16
-letters, 90 seconds. Swipe through touching letters (diagonals count) to spell
+Little web games to play with friends: **Word Rush** and **Secret Word**.
+
+## Secret Word
+
+Pick a 5-letter word and dare a friend to crack it in six guesses (green =
+right spot, yellow = in the word). You watch their guesses come in live; when
+they're done they can send you one back, and a head-to-head record keeps
+score. There's also a daily word with a leaderboard and a shareable emoji
+grid, and unlimited practice that works offline. The secret word stays on the
+server until the guessing is over. Guesses are checked against a 22 KB list of
+5-letter words; answers come from common words (SCOWL, see
+`data/SCOWL-COPYRIGHT`) with plurals and crude words removed.
+
+## Word Rush
+
+16 letters, 90 seconds. Swipe through touching letters (diagonals count) to spell
 as many words as you can.
 
 - **Challenge a friend.** No accounts: pick a nickname and send an invite link.
@@ -37,13 +51,16 @@ without downloading the dictionary (or seeing the answers).
 ```
 client/           vanilla JS app (no framework), bundled by esbuild
   js/rush/        round screen, match & recap screens, lobby, daily board
+  js/secret/      guess board + keyboard, challenges, daily word, practice
   sw.js           service worker: app shell + offline play + push
 shared/
   rush/board.js   dice, boards, solver, scoring, word hashes, bot
+  secret/game.js  guess feedback, word list format, daily word
   dict/           packed dictionary (DAWG) reader + transport format
 server/           Node http server: JSON API, WebSocket, static files
   rush.js         friend matches, per-player views, access control
-  daily.js        daily board leaderboard
+  daily.js        Word Rush daily leaderboard
+  secret.js       Secret Word challenges + daily word leaderboard
   store.js        Redis (Render Key Value) or in-memory storage
   push.js         Web Push "your turn" notifications (VAPID)
 tools/build.js    bundles, fingerprints and precompresses into dist/
@@ -96,4 +113,5 @@ folder under `client/js/<game>/` and `shared/<game>/`, routes in
 ## Credits
 
 Word list: ENABLE2K (public domain), plus a short supplement in
-`data/supplement.txt`.
+`data/supplement.txt`. Secret Word answers are drawn from SCOWL (Copyright
+2000-2018 Kevin Atkinson, permissive license in `data/SCOWL-COPYRIGHT`).

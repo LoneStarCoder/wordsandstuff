@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { createRush } from './rush.js';
 import { createDaily } from './daily.js';
+import { createSecret } from './secret.js';
 import { HttpError } from './util.js';
 import { createPlayers, cleanName } from './players.js';
 import { createHub } from './hub.js';
@@ -29,9 +30,10 @@ function limiter(max, windowMs) {
   };
 }
 
-export async function createApp({ store, dict, staticDir, publicUrl = 'http://localhost', log = console }) {
+export async function createApp({ store, dict, words, staticDir, publicUrl = 'http://localhost', log = console }) {
   const rush = createRush({ store, dict });
   const daily = createDaily({ store, dict });
+  const secret = createSecret({ store, words });
   const players = createPlayers({ store });
   const files = loadStatic(staticDir);
   const push = await createPush({ store, players, subject: publicUrl.startsWith('https:') ? publicUrl : 'mailto:noreply@example.com' });
@@ -103,15 +105,20 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
   // Tell both players' devices that a match changed; the other player gets
   // a push notification if they have no app open.
   function notify(g, fromSeat, pushBody) {
-    for (const seat of [0, 1]) {
-      const p = g.pl[seat];
-      if (!p) continue;
-      const delivered = hub.send(p.id, { t: 'up', id: g.id, ver: g.ver });
-      if (seat !== fromSeat && !delivered && pushBody) {
-        push.send(p.id, { title: 'Words and Stuff', body: pushBody, url: '/rush/' + g.id, tag: g.id }).catch(e => log.error('push', e));
-      }
-    }
+    tell(g.pl, g.id, g.ver, fromSeat, pushBody, '/rush/' + g.id);
   }
+
+  // players: [a, b]; `from` is the index of whoever caused the change.
+  function tell(players, id, ver, from, pushBody, url) {
+    players.forEach((p, k) => {
+      if (!p) return;
+      const delivered = hub.send(p.id, { t: 'up', id, ver });
+      if (k !== from && !delivered && pushBody) {
+        push.send(p.id, { title: 'Words and Stuff', body: pushBody, url, tag: id }).catch(e => log.error('push', e));
+      }
+    });
+  }
+  const tellSecret = (c, fromId, body) => tell([c.from, c.to], c.id, c.ver, c.from.id === fromId ? 0 : 1, body, '/secret/' + c.id);
 
   function roundMessage(g, seat, r) {
     const who = g.pl[seat].n, other = 1 - seat;
@@ -176,7 +183,9 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
 
     // Public invite details (no auth needed).
     if (m === 'GET' && a === 'invite' && b && c) {
-      const inv = await rush.invite(b, c);
+      let inv = await rush.invite(b, c);
+      if (inv) inv.t = 'rush';
+      else if ((inv = await secret.invite(b, c))) inv.t = 'secret';
       if (!inv) throw new HttpError(404, 'That invite has expired or was already used.');
       return send(inv);
     }
@@ -190,6 +199,7 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
         me.n = cleanName(body.name);
         await players.save(me);
         await rush.rename(me);
+        await secret.rename(me);
         return send({ id: me.id, n: me.n });
       }
     }
@@ -209,6 +219,42 @@ export async function createApp({ store, dict, staticDir, publicUrl = 'http://lo
     if (a === 'daily' && b) {
       if (m === 'GET') return send(await daily.scores(me, b));
       if (m === 'POST') return send(await daily.submit(me, b, (await readBody(req)).w));
+    }
+
+    if (a === 'sdaily' && b) {
+      if (m === 'GET') return send(await secret.dailyScores(me, b));
+      if (m === 'POST') return send(await secret.dailySubmit(me, b, (await readBody(req)).g));
+    }
+
+    if (a === 'secret') {
+      const out = c => send(secret.view(c, me.id), 200, { ETag: `"${c.ver}.${me.id}"` });
+      if (!b && m === 'GET') {
+        const list = await secret.list(me.id);
+        return send(list, 200, { ETag: '"' + createHash('sha1').update(JSON.stringify(list)).digest('base64url').slice(0, 16) + '"' });
+      }
+      if (!b && m === 'POST') {
+        const body = await readBody(req);
+        const { c, other } = await secret.create(me, body.word, body.back ? String(body.back) : null);
+        if (other) tellSecret(c, me.id, `${me.n} sent you a secret word. Can you crack it?`);
+        return out(c);
+      }
+      if (b && m === 'GET' && !c) return out(await secret.get(me.id, b));
+      if (b && m === 'POST' && c === 'join') {
+        const { c: ch, joined } = await secret.join(me, b, String((await readBody(req)).jk || ''));
+        if (joined) tellSecret(ch, me.id, `${me.n} is guessing your word ${ch.word}…`);
+        return out(ch);
+      }
+      if (b && m === 'POST' && c === 'guess') {
+        const ch = await secret.guess(me, b, (await readBody(req)).g);
+        const v = secret.view(ch, me.id);
+        tellSecret(ch, me.id, v.done ? (v.solved ? `${me.n} cracked ${ch.word} in ${v.tries}!` : `${me.n} couldn't crack ${ch.word}. Your word wins!`) : null);
+        return out(ch);
+      }
+      if (b && m === 'DELETE' && !c) {
+        const ch = await secret.remove(me, b);
+        if (ch.gaveUp) tellSecret(ch, me.id, `${me.n} gave up on ${ch.word}.`);
+        return send({ ok: true });
+      }
     }
 
     const tagged = (g, seat) => send(rush.view(g, seat), 200, { ETag: `"${g.ver}.${seat}"` });

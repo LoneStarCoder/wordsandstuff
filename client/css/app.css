@@ -411,7 +411,7 @@ input.link {
   margin-bottom: 18px;
 }
 
-button.big {
+.big {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
@@ -421,11 +421,11 @@ button.big {
   box-shadow: var(--shadow);
 }
 
-button.big b {
+.big b {
   font-size: 1.05rem;
 }
 
-button.big span {
+.big span {
   font-size: 0.8rem;
   font-weight: 500;
   opacity: 0.8;
@@ -977,13 +977,13 @@ button.big span {
   margin-bottom: 4px;
 }
 
-.count {
+.countdown {
   font-size: 7rem;
   font-weight: 900;
   color: var(--accent);
 }
 
-.count.pop {
+.countdown.pop {
   animation: countpop 0.6s both;
 }
 
@@ -1629,4 +1629,241 @@ button.big span {
 .leader-list .pts {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* ---- Secret Word ---- */
+
+:root {
+  --sw-g: #4ea468;
+  --sw-y: #e0b23a;
+  --sw-x: #8f8577;
+}
+
+.tile.sw-g { background: var(--sw-g); color: #fff; box-shadow: inset 0 -0.12em 0 #3a8150; }
+.tile.sw-y { background: var(--sw-y); color: #fff; box-shadow: inset 0 -0.12em 0 #b88e22; }
+
+.sw-art .tile {
+  width: 22px;
+  font-size: 13px;
+}
+
+.sw-page {
+  max-width: 480px;
+}
+
+.sw-status {
+  text-align: center;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.sw-status.done {
+  font-size: 1.2rem;
+}
+
+.sw-secret {
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.sw-secret b {
+  color: var(--text);
+  letter-spacing: 0.2em;
+}
+
+.sw-board {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.sw-grid {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 330px);
+}
+
+.sw-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.sw-row.shake {
+  animation: shake 0.35s;
+}
+
+.sw-tile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  font-size: clamp(22px, 8vw, 32px);
+  font-weight: 800;
+  background: var(--surface);
+  text-transform: uppercase;
+}
+
+.sw-tile.typed {
+  border-color: var(--muted);
+  animation: typed 0.1s;
+}
+
+@keyframes typed {
+  50% { transform: scale(1.08); }
+}
+
+.sw-tile.s-g, .sw-tile.s-y, .sw-tile.s-x {
+  color: #fff;
+  border-color: transparent;
+}
+
+.sw-tile.s-g { background: var(--sw-g); }
+.sw-tile.s-y { background: var(--sw-y); }
+.sw-tile.s-x { background: var(--sw-x); }
+
+.sw-tile.flip {
+  animation: flip 0.5s both;
+}
+
+@keyframes flip {
+  0% { transform: rotateX(0); background: var(--surface); color: var(--text); border-color: var(--muted); }
+  49% { background: var(--surface); color: var(--text); border-color: var(--muted); }
+  50% { transform: rotateX(90deg); }
+  100% { transform: rotateX(0); }
+}
+
+.sw-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.sw-krow {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.sw-key {
+  flex: 1;
+  max-width: 44px;
+  min-height: 52px;
+  padding: 0;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 1rem;
+  background: var(--surface-2);
+  border: 0;
+}
+
+.sw-key.wide {
+  max-width: 68px;
+  flex: 1.5;
+  font-size: 0.78rem;
+}
+
+.sw-key.s-g { background: var(--sw-g); color: #fff; }
+.sw-key.s-y { background: var(--sw-y); color: #fff; }
+.sw-key.s-x { background: var(--sw-x); color: #fff; opacity: 0.7; }
+
+.sw-board.locked .sw-keys {
+  display: none;
+}
+
+.sw-actions {
+  margin: 18px 0;
+}
+
+.sw-input {
+  font-size: 2rem !important;
+  text-align: center;
+  letter-spacing: 0.4em;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sw-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.sw-legend .sw-tile {
+  width: 34px;
+  font-size: 18px;
+}
+
+.mini-fb {
+  display: flex;
+  flex-direction: column;
+  font-size: 9px;
+  line-height: 1.05;
+  letter-spacing: -1px;
+}
+
+.leader-list .mini-fb {
+  flex: none;
+}
+
+.records {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.records p {
+  margin: 0 0 8px;
+}
+
+.record {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.record b {
+  flex: 1;
+}
+
+.record .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 0.85rem;
+}
+
+.sw-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sw-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sw-bar span {
+  width: 1em;
+  font-weight: 700;
+}
+
+.sw-bar i {
+  font-style: normal;
+  background: var(--sw-g);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: right;
 }

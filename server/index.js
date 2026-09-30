@@ -12,6 +12,8 @@ import { createStore } from './store.js';
 import { createApp } from './app.js';
 import { Dawg } from '../shared/dict/dawg.js';
 import { unpack } from '../shared/dict/pack.js';
+import { parseWords } from '../shared/secret/game.js';
+import { fiveWords } from '../tools/five-build.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');
@@ -30,9 +32,11 @@ async function loadDict() {
 const env = process.env;
 const store = await createStore({ url: env.REDIS_URL, prefix: env.KEY_PREFIX || 'wns:', file: env.DATA_FILE });
 const dict = await loadDict();
+const words = parseWords(fiveWords(join(root, 'data')));
 const app = await createApp({
   store,
   dict,
+  words,
   staticDir: dist,
   publicUrl: env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || 'http://localhost',
 });

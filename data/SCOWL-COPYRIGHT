@@ -1,0 +1,39 @@
+The collective work is Copyright 2000-2018 by Kevin Atkinson as well
+as any of the copyrights mentioned below:
+
+  Copyright 2000-2018 by Kevin Atkinson
+
+  Permission to use, copy, modify, distribute and sell these word
+  lists, the associated scripts, the output created from the scripts,
+  and its documentation for any purpose is hereby granted without fee,
+  provided that the above copyright notice appears in all copies and
+  that both that copyright notice and this permission notice appear in
+  supporting documentation. Kevin Atkinson makes no representations
+  about the suitability of this array for any purpose. It is provided
+  "as is" without express or implied warranty.
+
+Alan Beale <biljir@pobox.com> also deserves special credit as he has,
+in addition to providing the 12Dicts package and being a major
+contributor to the ENABLE word list, given me an incredible amount of
+feedback and created a number of special lists (those found in the
+Supplement) in order to help improve the overall quality of SCOWL.
+
+The 10 level includes the 1000 most common English words (according to
+the Moby (TM) Words II [MWords] package), a subset of the 1000 most
+common words on the Internet (again, according to Moby Words II), and
+frequently class 16 from Brian Kelk's "UK English Wordlist
+with Frequency Classification".
+
+The MWords package was explicitly placed in the public domain:
+
+    The Moby lexicon project is complete and has
+    been place into the public domain. Use, sell,
+    rework, excerpt and use in any way on any platform.
+
+    Placing this material on internal or public servers is
+    also encouraged. The compiler is not aware of any
+    export restrictions so freely distribute world-wide.
+
+    You can verify the public domain status by contacting
+
+    Grady Ward

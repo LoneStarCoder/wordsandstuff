@@ -1,3 +1,5 @@
+import { parseWords } from '../shared/secret/game.js';
+import { fiveWords } from '../tools/five-build.js';
 import { loadWords, buildDawg } from '../tools/dawg-build.js';
 import { Dawg } from '../shared/dict/dawg.js';
 
@@ -21,4 +23,10 @@ export function seeded(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+let five;
+export function fiveList() {
+  five ||= parseWords(fiveWords(new URL('../data', import.meta.url).pathname));
+  return five;
 }

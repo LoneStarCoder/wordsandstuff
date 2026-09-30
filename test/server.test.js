@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { createStore } from '../server/store.js';
 import { createApp } from '../server/app.js';
-import { fullDict } from './helpers.js';
+import { fullDict, fiveList } from './helpers.js';
 
 let app, store, base;
 
 before(async () => {
   // Set TEST_REDIS_URL to run against a real Redis instead of memory.
   store = await createStore({ url: process.env.TEST_REDIS_URL, prefix: 'wnstest:' + Date.now() + ':' });
-  app = await createApp({ store, dict: fullDict(), staticDir: '/nonexistent', log: { error() {} } });
+  app = await createApp({ store, dict: fullDict(), words: fiveList(), staticDir: '/nonexistent', log: { error() {} } });
   await new Promise(r => app.server.listen(0, r));
   base = `http://127.0.0.1:${app.server.address().port}`;
 });
@@ -69,7 +69,7 @@ test('two friends play a Word Rush match: invite, rounds, recaps, rematch', asyn
   assert.deepEqual(g.pl, ['Ann', null]);
 
   // Invite preview and join; a third player can't take the seat.
-  assert.deepEqual((await call('GET', `/api/invite/${g.id}/${g.jk}`)).data, { id: g.id, by: 'Ann' });
+  assert.deepEqual((await call('GET', `/api/invite/${g.id}/${g.jk}`)).data, { id: g.id, by: 'Ann', t: 'rush' });
   assert.equal((await call('GET', `/api/invite/${g.id}/wrong`)).status, 404);
   assert.equal((await call('GET', `/api/rush/${g.id}`, null, b.token)).status, 404, 'not visible before joining');
   const joined = (await call('POST', `/api/rush/${g.id}/join`, { jk: g.jk }, b.token)).data;
@@ -192,4 +192,64 @@ test('daily board: server re-scores words and ranks everyone', async () => {
   // Old or malformed dates are refused.
   assert.equal((await call('POST', '/api/daily/2020-01-01', { w: [] }, a.token)).status, 400);
   assert.equal((await call('GET', '/api/daily/nope', null, a.token)).status, 400);
+});
+
+test('secret word: set a word, friend guesses, word stays hidden until the end', async () => {
+  const a = (await call('POST', '/api/hello', { name: 'Sam' })).data;
+  const b = (await call('POST', '/api/hello', { name: 'Liz' })).data;
+  assert.equal((await call('POST', '/api/secret', { word: 'XQZZY' }, a.token)).status, 400);
+  assert.equal((await call('POST', '/api/secret', { word: 'toolong' }, a.token)).status, 400);
+  const c = (await call('POST', '/api/secret', { word: 'blend' }, a.token)).data;
+  assert.equal(c.word, 'BLEND', 'setter sees the word');
+  assert.equal(c.role, 'setter');
+  assert.deepEqual((await call('GET', `/api/invite/${c.id}/${c.jk}`)).data, { id: c.id, by: 'Sam', t: 'secret' });
+  const sb = socket(b.token), sa = socket(a.token);
+  await sa.next(e => e.t === 'hi');
+  const j = (await call('POST', `/api/secret/${c.id}/join`, { jk: c.jk }, b.token)).data;
+  assert.equal(j.role, 'guesser');
+  assert.equal(j.word, undefined, 'guesser does not get the word');
+  await sa.next(e => e.t === 'up' && e.id === c.id);
+  assert.equal((await call('POST', `/api/secret/${c.id}/guess`, { g: 'CRANE' }, a.token)).status, 400, 'setter cannot guess');
+  assert.equal((await call('POST', `/api/secret/${c.id}/guess`, { g: 'ZZZZZ' }, b.token)).status, 400, 'not a word');
+  let v = (await call('POST', `/api/secret/${c.id}/guess`, { g: 'bleed' }, b.token)).data;
+  assert.deepEqual(v.fb, ['ggg.g']);
+  assert.equal(v.word, undefined);
+  assert.equal((await call('POST', `/api/secret/${c.id}/guess`, { g: 'BLEED' }, b.token)).status, 400, 'no repeats');
+  v = (await call('POST', `/api/secret/${c.id}/guess`, { g: 'BLEND' }, b.token)).data;
+  assert.equal(v.done, true);
+  assert.equal(v.solved, true);
+  assert.equal(v.tries, 2);
+  assert.equal(v.word, 'BLEND', 'revealed once done');
+  assert.equal((await call('POST', `/api/secret/${c.id}/guess`, { g: 'CRANE' }, b.token)).status, 400, 'over');
+  // Liz sends one back; it goes straight to Sam.
+  const back = (await call('POST', '/api/secret', { word: 'CRANE', back: c.id }, b.token)).data;
+  assert.equal(back.to, 'Sam');
+  await sa.next(e => e.t === 'up' && e.id === back.id);
+  assert.equal((await call('GET', `/api/secret/${c.id}`, null, b.token)).data.back, back.id);
+  const listA = (await call('GET', '/api/secret', null, a.token)).data;
+  assert.deepEqual(listA.map(x => x.id).sort(), [c.id, back.id].sort());
+  assert.equal(listA.find(x => x.id === back.id).word, undefined, 'Sam must guess CRANE');
+  // Six misses and it's over; giving up also ends it.
+  for (const g of ['SLATE', 'FIGHT', 'BUMPY', 'WORLD', 'JAZZY', 'DOUGH']) v = (await call('POST', `/api/secret/${back.id}/guess`, { g }, a.token)).data;
+  assert.equal(v.done, true);
+  assert.equal(v.solved, false);
+  assert.equal(v.word, 'CRANE');
+  sa.ws.close();
+  sb.ws.close();
+});
+
+test('secret word daily: server checks guesses against the day word', async () => {
+  const { dailyAnswer } = await import('../shared/secret/game.js');
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const answer = dailyAnswer(day, fiveList().answers);
+  const a = (await call('POST', '/api/hello', { name: 'Pat' })).data;
+  const b = (await call('POST', '/api/hello', { name: 'Kim' })).data;
+  const other = [...fiveList().allowed].find(w => w !== answer);
+  const ra = (await call('POST', `/api/sdaily/${day}`, { g: [other, answer] }, a.token)).data;
+  assert.equal(ra[0].t, 2);
+  assert.equal(ra[0].fb[1], 'ggggg');
+  await call('POST', `/api/sdaily/${day}`, { g: [other, other, other, other, other, other] }, b.token);
+  const t = (await call('GET', `/api/sdaily/${day}`, null, b.token)).data;
+  assert.deepEqual(t.map(x => [x.n, x.t]), [['Pat', 2], ['Kim', null]]);
 });
